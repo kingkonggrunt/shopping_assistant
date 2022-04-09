@@ -1,4 +1,13 @@
 from dataclasses import dataclass, field
+import enum
+
+
+class SaleType(enum.Enum):
+    normal = 0
+    everyday = 1
+    special = 2
+    new = 3
+
 
 @dataclass
 class ColesItem:
@@ -7,6 +16,7 @@ class ColesItem:
     brand: str
     name: str
     size: str
+    sale_type: str = field(init=False)
     price: float = field(init=False)
     unit_price: str
     dollar: str = field(repr=False)
@@ -17,3 +27,20 @@ class ColesItem:
     
     def __post_init__(self):
         self.price = float(f"{self.dollar}{self.cent}")
+        
+        if "everyday product" in self.size:
+            self.sale_type = SaleType.everyday
+        elif "on special" in self.size:
+            self.sale_type = SaleType.special
+        elif "new product" in self.size:
+            self.sale_type = SaleType.new
+        else:
+            self.sale_type = SaleType.normal
+        
+        # if "everyday" in self.size:
+        # everyday product, on special, new product
+        # product = none
+        # everyday = everyday product
+        # specials = on special
+        # new = new product
+            
