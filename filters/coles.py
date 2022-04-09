@@ -32,5 +32,5 @@ class New(SoupStrainer):
 
         
 class DownDown(SoupStrainer):
-    def __init__(self, name="div", class_="product-down-down"):
+    def __init__(self, name="div", class_="product product-down-down"):
         super().__init__(name, class_=class_)
