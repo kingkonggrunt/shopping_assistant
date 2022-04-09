@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 import enum
 
 
-class SaleType(enum.Enum):
+class SaleType(int, enum.Enum):
     normal = 0
     everyday = 1
     special = 2
@@ -16,7 +16,7 @@ class ColesItem:
     brand: str
     name: str
     size: str
-    sale_type: str = field(init=False)
+    sale_type: SaleType = field(init=False)
     price: float = field(init=False)
     unit_price: str
     dollar: str = field(repr=False)
