@@ -1,5 +1,9 @@
+import re
 from bs4 import SoupStrainer
 
+class AllProducts(SoupStrainer):
+    def __init__(self, name="div", class_=re.compile('^product')):
+        super().__init__(name, class_=class_)
 
 
 class Product(SoupStrainer):
