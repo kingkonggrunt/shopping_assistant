@@ -6,11 +6,20 @@ from selenium.webdriver.firefox.options import Options
 
 from bs4 import BeautifulSoup, SoupStrainer
 
+from pymongo import MongoClient
+import json
+
+import os
+from dotenv import load_dotenv
+
 from coles import ColesItem
 from filters import ColesFilter
 
+
+load_dotenv()
+
 def get_milk():
-    url = "https://shop.coles.com.au/a/national/everything/search/milk"
+    url = "https://shop.coles.com.au/a/national/everything/search/breakfast"
 
     options = Options()
     # options.headless = True
@@ -18,7 +27,7 @@ def get_milk():
                                executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
     driver.get(url)
     
-    with open('stores/coles/milk.html', 'w') as f:
+    with open('stores/coles/breakfast.html', 'w') as f:
         f.write(driver.page_source)
 
     driver.quit()
@@ -85,23 +94,36 @@ def printer(next=None):
     while True:
         _ = (yield)
         print(_)
+        
+def save_to_db(next=None):
+    client = MongoClient(os.environ.get('HOST'),
+                         username=os.environ.get('USERNAME'),
+                         password=os.environ.get('PASSWORD'),
+                         authSource=os.environ.get('AUTHSOURCE'))
+    db = client.test
+    collection = db.coles_item
+    print("Open to database")
+    while True:
+        item: ColesItem = (yield)
+        _id = collection.insert_one(item.to_dict()).inserted_id
+        
+    if next: next.send(print(_id))
+            
 
 def main():
-    # get_milk()
     
     p = printer()
-    identifier = identify_products(next=p)
+    to_db = save_to_db(next=p)
+    identifier = identify_products(next=to_db)
     everyday = filter_search_result(ColesFilter.AllProducts, next=identifier)
     item_search = coles_item(next=everyday)
     
     
     next(item_search)
-    next(identifier)
     next(everyday)
+    next(identifier)
+    next(to_db)
     next(p)
-    
-    # with open("stores/coles/milk.html", "r") as milk_page:
-    #     everyday.send(milk_page)
         
     while True:
         item = input("What Coles Item are you looking for? ")
@@ -113,3 +135,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    # from pymongo import MongoClient
+    # client = MongoClient("local-pi-02",
+    #                      username="Test1",
+    #                      password="test",
+    #                      authSource="test")
+    # db = client.test
+    # collection = db.movies
+    # print(collection.find_one())
