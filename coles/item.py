@@ -43,4 +43,7 @@ class ColesItem:
         # everyday = everyday product
         # specials = on special
         # new = new product
+        
+    def to_dict(self):
+        return asdict(self)
             
