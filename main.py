@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from coles import ColesItem
 from filters import ColesFilter
 
+import datetime
+
 
 load_dotenv()
 
@@ -172,14 +174,16 @@ def main():
     
     p = printer()
     to_db = save_to_db(next=p)
-    identifier = identify_products(next=to_db)
-    everyday = filter_search_result(ColesFilter.AllProducts, next=identifier)
-    item_search = coles_item(next=everyday)
+    normalize = normalize_item(next=to_db)
+    identifier = identify_products(next=normalize)
+    products = filter_search_result(ColesFilter.AllProducts, next=identifier)
+    item_search = coles_item(headless=False, next=products)
     
     
     next(item_search)
-    next(everyday)
+    next(products)
     next(identifier)
+    next(normalize)
     next(to_db)
     next(p)
         
