@@ -90,6 +90,31 @@ def identify_products(next=None):
                     
             if next: next.send(item)
             
+def normalize_item(next=None):
+    print("Open for Normalisating ColesItems to Dictionary")
+    while True:
+        item: ColesItem = (yield)
+        item_dict = item.to_dict()
+        
+        normalize_item = {
+            "id" : item_dict['id'],
+            "full_name": item_dict['full_name'],
+            "brand": item_dict['brand'],
+            "size": item_dict["size"],
+            "link": item_dict['link'],
+            "partnumber" : item_dict['partnumber'],
+            "price_history": [{
+                "date": datetime.datetime.utcnow(),
+                "price": item_dict['price'],
+                "dollar": item_dict['dollar'],
+                "cent": item_dict['cent'],
+                "unit_price": item_dict['unit_price'],
+                "sale_type": item_dict['sale_type'],
+            }]
+        }   
+        
+        if next: next.send(normalize_item)
+            
 def printer(next=None):
     while True:
         _ = (yield)
