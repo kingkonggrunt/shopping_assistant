@@ -144,13 +144,28 @@ def save_to_db(next=None):
                          password=os.environ.get('PASSWORD'),
                          authSource=os.environ.get('AUTHSOURCE'))
     db = client.test
-    collection = db.coles_item
+    collection = db.coles_item_3
     print("Open to database")
     while True:
-        item: ColesItem = (yield)
-        _id = collection.insert_one(item.to_dict()).inserted_id
+        item: dict = (yield)
         
-    if next: next.send(print(_id))
+        search_query = {"id": item['id']}
+        if result := collection.find_one(search_query):
+            update = dict()
+            update['$set'] = dict()
+            if result['full_name'] != item['full_name']:
+                update['$set']['full_name'] = item['full_name']
+            if result['brand'] != item['brand']:
+                update['$set']['brand'] = item['brand']
+            if result['size'] != item['size']:
+                update['$set']['size'] = item['size']
+        
+            update["$push"] = {"price_history": item['price_history'][0]}
+            _ = collection.update_one(search_query, update).modified_count
+        else:
+            _ = collection.insert_one(item).inserted_id
+            
+        if next: next.send(_)
             
 
 def main():
