@@ -41,7 +41,20 @@ def get_milk():
 #     return start
     
     
-def coles_item(next=None):
+class FirefoxDriver:
+    def __init__(self, *, headless: bool=True):
+        self.options = Options()
+        self.options.headless = headless
+        self.driver = None
+        
+    def __enter__(self):
+        self.driver = webdriver.Firefox(options=self.options, 
+                                        executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
+        return self.driver
+    
+    def __exit__(self, exc_type, exc_value, exe_traceback):
+        self.driver.quit()
+    
     url = "https://shop.coles.com.au/a/national/everything/search/"
     print("Open to Searching for Products")
     while True:
