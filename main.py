@@ -55,21 +55,26 @@ class FirefoxDriver:
     def __exit__(self, exc_type, exc_value, exe_traceback):
         self.driver.quit()
     
+def coles_item(headless: bool=True, next=None):
     url = "https://shop.coles.com.au/a/national/everything/search/"
     print("Open to Searching for Products")
     while True:
         search_item = (yield)
         
-        options = Options()
-        options.headless = True
-        driver = webdriver.Firefox(options=options,
-                                executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
+        with FirefoxDriver(headless=False) as d:
+            d.get(f"{url}{search_item}")
+            if next: next.send(d.page_source)
+            
+        # options = Options()
+        # options.headless = headless
+        # driver = webdriver.Firefox(options=options,
+        #                         executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
     
-        driver.get(f"{url}{search_item}")
+        # driver.get(f"{url}{search_item}")
+        # page_source = driver.page_source.deepcopy()
+        # driver.quit()
+        
 
-        if next: next.send(driver.page_source)
-
-        driver.quit()
     
 # @coroutine
 def filter_search_result(filter: ColesFilter, next=None):
