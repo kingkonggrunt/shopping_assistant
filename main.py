@@ -1,158 +1,172 @@
-
-
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-
-
-from bs4 import BeautifulSoup, SoupStrainer
-
-from pymongo import MongoClient
-import json
-
 import os
+from types import CoroutineType
+
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from coles import ColesItem
-from filters import ColesFilter
-
-import datetime
+from src.database import connections
+from src.filters import ColesFilter
+from src.items import ColesItem
+from src.web import FirefoxDriver
 
 
 load_dotenv()
 
-def get_milk():
-    url = "https://shop.coles.com.au/a/national/everything/search/breakfast"
 
-    options = Options()
-    # options.headless = True
-    driver = webdriver.Firefox(options=options,
-                               executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
-    driver.get(url)
-    
-    with open('stores/coles/breakfast.html', 'w') as f:
-        f.write(driver.page_source)
 
-    driver.quit()
-    
-    
-# def coroutine(func):
-#     def start(*args,**kwargs):
-#         cr = func(*args,**kwargs)
-#         cr.next()
-#         return cr
-#     return start
-    
-    
-class FirefoxDriver:
-    def __init__(self, *, headless: bool=True):
-        self.options = Options()
-        self.options.headless = headless
-        self.driver = None
-        
-    def __enter__(self):
-        self.driver = webdriver.Firefox(options=self.options, 
-                                        executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
-        return self.driver
-    
-    def __exit__(self, exc_type, exc_value, exe_traceback):
-        self.driver.quit()
-    
-def coles_item(headless: bool=True, next=None):
+def coles_item(headless: bool=True, pipe_to: CoroutineType=None) -> str:  #TODO: refactor so that it can accept different urls
+    """Send a Search Page result from a shopping website to another coroutine
+
+    Args:
+        headless (bool, optional): Run Selenium scraper in headless mode. Defaults to True.
+        pipe_to (Generator, optional): Next Coroutine to send page_source to. Defaults to None.
+    """
+
     url = "https://shop.coles.com.au/a/national/everything/search/"
-    print("Open to Searching for Products")
+
+    print(f"Open to Product Searching on : {url}")
+
     while True:
         search_item = (yield)
-        
-        with FirefoxDriver(headless=False) as d:
-            d.get(f"{url}{search_item}")
-            if next: next.send(d.page_source)
-            
-        # options = Options()
-        # options.headless = headless
-        # driver = webdriver.Firefox(options=options,
-        #                         executable_path=r"/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver")
-    
-        # driver.get(f"{url}{search_item}")
-        # page_source = driver.page_source.deepcopy()
-        # driver.quit()
-        
 
-    
-# @coroutine
-def filter_search_result(filter: ColesFilter, next=None):
-    print(f"Open for Filtering Products. Filter: {filter}")
+        with FirefoxDriver(driver_path="/home/mint/Desktop/Development/shopping_assistant/gecko/geckodriver", headless=headless) as d:
+            d.get(f"{url}{search_item}")
+            if pipe_to:
+                pipe_to.send(d.page_source)
+
+
+def filter_search_result(item_filter: ColesFilter, pipe_to: CoroutineType=None) -> BeautifulSoup:
+    """Filter a Page Source with a SoupStrainer Object
+
+    Args:
+        item_filter (ColesFilter): A predefined SoupStrainer object
+        pipe_to (Generator, optional): Coroutine to send filtered page source to. Defaults to None.
+    """
+    print(f"Open for Filtering Page Source Data. Filter: {item_filter}")
+
     while True:
         page_source: str = (yield)
         soup = BeautifulSoup(page_source, 'html.parser',
-                             parse_only=filter())
+                             parse_only=item_filter())
 
-        if next: next.send(soup)
+        if pipe_to:
+            pipe_to.send(soup)
 
-# @coroutine     
-def identify_products(next=None):
-    print("Open for Identifying Products")
-    product_count = 0
+def identify_coles_products(pipe_to: CoroutineType=None) -> ColesItem:
+    """Identify all Coles Products from a page source
+
+    Args:
+        pipe_to (Generator, optional): Coroutine to send a ColesItem to. Defaults to None.
+
+    Returns:
+        ColesItem: ColesItem DataClass
+    """
+
+    print("Open for Identifying Coles Product")
+
     while True:
         soup: BeautifulSoup = (yield)
+
         for header in soup.find_all("header", class_="product-header"):
-            item = ColesItem(
-                full_name=header.find('span', class_="accessibility-inline").text,
-                brand=header.find('span', class_="product-brand").text,
-                name=header.find('span', class_="product-name").text,
-                size=header.find('span', class_="package-size").text,
-                dollar=header.find('span', class_="dollar-value").text,
-                cent=header.find('span', class_="cent-value").text,
-                unit_price=header.find('span', class_="package-price").text,
-                id=header.find("h3", class_="product-title")['data-itemid'],
-                link=header.find("a", class_="product-image-link")['href'],
-                partnumber=header.find("h3", class_="product-title")['data-partnumber']
-            )
-                    
-            if next: next.send(item)
-            
-def normalize_item(next=None):
+            # item = ColesItem(
+            #     full_name=header.find('span', class_="accessibility-inline").text,
+            #     brand=header.find('span', class_="product-brand").text,
+            #     name=header.find('span', class_="product-name").text,
+            #     size=header.find('span', class_="package-size").text,
+            #     dollar=header.find('span', class_="dollar-value").text,
+            #     cent=header.find('span', class_="cent-value").text,
+            #     unit_price=header.find('span', class_="package-price").text,
+            #     id=header.find("h3", class_="product-title")['data-itemid'],
+            #     link=header.find("a", class_="product-image-link")['href'],
+            #     partnumber=header.find("h3", class_="product-title")['data-partnumber']
+            # )
+            item = ColesItem.from_header(header)
+
+            if pipe_to:
+                pipe_to.send(item)
+
+def normalize_coles_item(pipe_to: CoroutineType=None) -> dict:
+    """Normalize a ColesItem into a dictionary appriopiate for the database
+
+    Args:
+        pipe_to (Generator, optional): Coroutine to send dictionary to. Defaults to None.
+
+    Returns:
+        dict: Normalized ColesItem
+    """
+
     print("Open for Normalisating ColesItems to Dictionary")
+
     while True:
         item: ColesItem = (yield)
-        item_dict = item.to_dict()
-        
-        normalize_item = {
-            "id" : item_dict['id'],
-            "full_name": item_dict['full_name'],
-            "brand": item_dict['brand'],
-            "size": item_dict["size"],
-            "link": item_dict['link'],
-            "partnumber" : item_dict['partnumber'],
-            "price_history": [{
-                "date": datetime.datetime.utcnow(),
-                "price": item_dict['price'],
-                "dollar": item_dict['dollar'],
-                "cent": item_dict['cent'],
-                "unit_price": item_dict['unit_price'],
-                "sale_type": item_dict['sale_type'],
-            }]
-        }   
-        
-        if next: next.send(normalize_item)
-            
-def printer(next=None):
+        # item_dict = item.to_dict()
+
+        # normalize_item = {
+        #     "id" : item_dict['id'],
+        #     "full_name": item_dict['full_name'],
+        #     "brand": item_dict['brand'],
+        #     "size": item_dict["size"],
+        #     "link": item_dict['link'],
+        #     "partnumber" : item_dict['partnumber'],
+        #     "price_history": [{
+        #         "date": datetime.datetime.utcnow(),
+        #         "price": item_dict['price'],
+        #         "dollar": item_dict['dollar'],
+        #         "cent": item_dict['cent'],
+        #         "unit_price": item_dict['unit_price'],
+        #         "sale_type": item_dict['sale_type'],
+        #     }]
+        # }
+
+        if pipe_to:
+            pipe_to.send(item.normalize_for_db())
+
+def printer(pipe_to: CoroutineType=None):
+    """Printer
+
+    Args:
+        pipe_to (Generator, optional): Coroutine to send data to. Defaults to None.
+    """
+    print("Printer Open")
     while True:
         _ = (yield)
         print(_)
         
-def save_to_db(next=None):
-    client = MongoClient(os.environ.get('HOST'),
-                         username=os.environ.get('USERNAME'),
-                         password=os.environ.get('PASSWORD'),
-                         authSource=os.environ.get('AUTHSOURCE'))
-    db = client.test
-    collection = db.coles_item_3
-    print("Open to database")
+        if pipe_to:
+            pipe_to.send(_)
+
+def save_to_db(pipe_to: CoroutineType=None) -> str:
+    """Save a Dictionary to a database
+
+    Args:
+        pipe_to (Generator, optional): Coroutine to send database response to. Defaults to None.
+
+    Returns:
+        str: Database Response
+            On insert_one return the id of the new database entry
+            On update_one return the amount of keys that are modified in the database
+    """
+    # client = MongoClient(os.environ.get('HOST'),
+    #                      username=os.environ.get('USERNAME'),
+    #                      password=os.environ.get('PASSWORD'),
+    #                      authSource=os.environ.get('AUTHSOURCE'))
+    # db = client.test
+    # collection = db.coles_item_3
+
+    mongo = connections.Mongo(host=os.environ.get("HOST"),
+                              username=os.environ.get('USERNAME'),
+                              password=os.environ.get('PASSWORD'),
+                              authSource=os.environ.get('AUTHSOURCE'))
+    mongo.set_db("test")
+    mongo.set_collection("coles_item_3")
+
+    print("Database Open")
+
     while True:
         item: dict = (yield)
-        
+
         search_query = {"id": item['id']}
-        if result := collection.find_one(search_query):
+        if result := mongo.collection.find_one(search_query):
             update = dict()
             update['$set'] = dict()
             if result['full_name'] != item['full_name']:
@@ -161,48 +175,41 @@ def save_to_db(next=None):
                 update['$set']['brand'] = item['brand']
             if result['size'] != item['size']:
                 update['$set']['size'] = item['size']
-        
+
             update["$push"] = {"price_history": item['price_history'][0]}
-            _ = collection.update_one(search_query, update).modified_count
+            _ = mongo.collection.update_one(search_query, update).modified_count
         else:
-            _ = collection.insert_one(item).inserted_id
-            
-        if next: next.send(_)
-            
+            _ = mongo.collection.insert_one(item).inserted_id
+
+        if pipe_to:
+            pipe_to.send(_)
+
 
 def main():
-    
+    """Main Function
+    Run the coroutine pipeline
+    """
     p = printer()
-    to_db = save_to_db(next=p)
-    normalize = normalize_item(next=to_db)
-    identifier = identify_products(next=normalize)
-    products = filter_search_result(ColesFilter.AllProducts, next=identifier)
-    item_search = coles_item(headless=False, next=products)
-    
-    
+    to_db = save_to_db(pipe_to=p)
+    normalize = normalize_coles_item(pipe_to=to_db)
+    identifier = identify_coles_products(pipe_to=normalize)
+    products = filter_search_result(ColesFilter.AllProducts, pipe_to=identifier)
+    item_search = coles_item(headless=False, pipe_to=products)
+
     next(item_search)
+
     next(products)
     next(identifier)
     next(normalize)
     next(to_db)
     next(p)
-        
+
     while True:
         item = input("What Coles Item are you looking for? ")
-        if item: item_search.send(item)
+        if item:
+            item_search.send(item)
         
-            
-            
             
 
 if __name__ == "__main__":
     main()
-    
-    # from pymongo import MongoClient
-    # client = MongoClient("local-pi-02",
-    #                      username="Test1",
-    #                      password="test",
-    #                      authSource="test")
-    # db = client.test
-    # collection = db.movies
-    # print(collection.find_one())
